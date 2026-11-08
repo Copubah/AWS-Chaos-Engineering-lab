@@ -1,5 +1,3 @@
-# Auto Scaling Group
-
 resource "aws_autoscaling_group" "app" {
   name = "${var.project_name}-asg"
 
@@ -16,11 +14,23 @@ resource "aws_autoscaling_group" "app" {
   health_check_type         = "ELB"
   health_check_grace_period = 300
 
+  # Enable one-minute Auto Scaling metrics
+  metrics_granularity = "1Minute"
+
+  enabled_metrics = [
+    "GroupMinSize",
+    "GroupMaxSize",
+    "GroupDesiredCapacity",
+    "GroupInServiceInstances",
+    "GroupTotalInstances"
+  ]
+
   launch_template {
     id      = aws_launch_template.app.id
     version = "$Latest"
   }
 
+  # Instance tags
   tag {
     key                 = "Name"
     value               = "${var.project_name}-asg-instance"
@@ -34,12 +44,19 @@ resource "aws_autoscaling_group" "app" {
   }
 
   tag {
+    key                 = "Environment"
+    value               = "development"
+    propagate_at_launch = true
+  }
+
+  tag {
     key                 = "ManagedBy"
     value               = "Terraform"
     propagate_at_launch = true
   }
 
   lifecycle {
+    # Allow AWS Auto Scaling to change capacity during experiments
     ignore_changes = [
       desired_capacity
     ]
