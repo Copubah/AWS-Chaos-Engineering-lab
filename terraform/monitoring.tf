@@ -104,8 +104,8 @@ resource "aws_cloudwatch_dashboard" "main" {
         height = 6
 
         properties = {
-          title = "Application Load Balancer Requests"
-          view  = "timeSeries"
+          title  = "Application Load Balancer Requests"
+          view   = "timeSeries"
           region = var.aws_region
 
           metrics = [

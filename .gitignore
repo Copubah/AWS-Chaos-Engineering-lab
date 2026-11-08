@@ -10,7 +10,33 @@ crash.*.log
 # AWS credentials
 .aws/
 *.pem
+# AWS credentials
+.aws/
+*.pem
 .env
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Operating system
+.DS_Store
+Thumbs.db
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfplan
+crash.log
+crash.*.log.env
 
 # Python
 __pycache__/
