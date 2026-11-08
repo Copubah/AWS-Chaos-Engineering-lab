@@ -87,7 +87,8 @@ resource "aws_fis_experiment_template" "terminate_instance" {
   }
 
   stop_condition {
-    source = "none"
+    source = "aws:cloudwatch:alarm"
+    value  = aws_cloudwatch_metric_alarm.low_capacity.arn
   }
 
   tags = merge(local.common_tags, {

@@ -1,12 +1,9 @@
-# SNS Topic for infrastructure alerts
 
 resource "aws_sns_topic" "alerts" {
   name = "${var.project_name}-alerts"
 
   tags = local.common_tags
 }
-
-# Optional email subscription
 
 resource "aws_sns_topic_subscription" "email" {
   count = var.notification_email != "" ? 1 : 0
@@ -16,80 +13,72 @@ resource "aws_sns_topic_subscription" "email" {
   endpoint  = var.notification_email
 }
 
-# Alarm: Unhealthy application targets
-
 resource "aws_cloudwatch_metric_alarm" "unhealthy_hosts" {
   alarm_name          = "${var.project_name}-unhealthy-hosts"
   alarm_description   = "One or more application targets are unhealthy"
-  namespace           = "AWS/ApplicationELB"
-  metric_name         = "UnHealthyHostCount"
-  statistic           = "Maximum"
-  period              = 60
-  evaluation_periods  = 2
-  threshold           = 0
   comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "UnHealthyHostCount"
+  namespace           = "AWS/ApplicationELB"
+  period              = 60
+  statistic           = "Maximum"
+  threshold           = 0
+  treat_missing_data  = "notBreaching"
 
   dimensions = {
-    LoadBalancer = join("/", slice(split("/", aws_lb.main.arn), 2, 5))
-    TargetGroup  = join("/", slice(split("/", aws_lb_target_group.app.arn), 2, 5))
+    LoadBalancer = join("/", slice(split("/", aws_lb.main.arn), 1, 4))
+    TargetGroup  = format("targetgroup/%s", join("/", slice(split("/", aws_lb_target_group.app.arn), 1, 3)))
   }
 
   alarm_actions = [aws_sns_topic.alerts.arn]
-
-  treat_missing_data = "notBreaching"
+  ok_actions    = [aws_sns_topic.alerts.arn]
 
   tags = local.common_tags
 }
-
-# Alarm: Application Load Balancer server errors
 
 resource "aws_cloudwatch_metric_alarm" "alb_errors" {
   alarm_name          = "${var.project_name}-alb-errors"
-  alarm_description   = "Load balancer is reporting server errors"
-  namespace           = "AWS/ApplicationELB"
-  metric_name         = "HTTPCode_ELB_5XX_Count"
-  statistic           = "Sum"
-  period              = 60
-  evaluation_periods  = 2
-  threshold           = 5
+  alarm_description   = "Application Load Balancer is returning HTTP 5XX errors"
   comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = 2
+  metric_name         = "HTTPCode_ELB_5XX_Count"
+  namespace           = "AWS/ApplicationELB"
+  period              = 60
+  statistic           = "Sum"
+  threshold           = 5
+  treat_missing_data  = "notBreaching"
 
   dimensions = {
-    LoadBalancer = join("/", slice(split("/", aws_lb.main.arn), 2, 5))
+    LoadBalancer = join("/", slice(split("/", aws_lb.main.arn), 1, 4))
   }
 
   alarm_actions = [aws_sns_topic.alerts.arn]
-
-  treat_missing_data = "notBreaching"
+  ok_actions    = [aws_sns_topic.alerts.arn]
 
   tags = local.common_tags
 }
 
-# Alarm: Insufficient EC2 capacity
-
 resource "aws_cloudwatch_metric_alarm" "low_capacity" {
   alarm_name          = "${var.project_name}-low-capacity"
-  alarm_description   = "Fewer than two EC2 instances are in service"
-  namespace           = "AWS/AutoScaling"
-  metric_name         = "GroupInServiceInstances"
-  statistic           = "Minimum"
-  period              = 60
-  evaluation_periods  = 2
-  threshold           = 2
+  alarm_description   = "Auto Scaling Group has fewer than two healthy instances"
   comparison_operator = "LessThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "GroupInServiceInstances"
+  namespace           = "AWS/AutoScaling"
+  period              = 60
+  statistic           = "Minimum"
+  threshold           = 2
+  treat_missing_data  = "notBreaching"
 
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.app.name
   }
 
   alarm_actions = [aws_sns_topic.alerts.arn]
-
-  treat_missing_data = "notBreaching"
+  ok_actions    = [aws_sns_topic.alerts.arn]
 
   tags = local.common_tags
 }
-
-# CloudWatch Dashboard
 
 resource "aws_cloudwatch_dashboard" "main" {
   dashboard_name = "${var.project_name}-dashboard"
@@ -105,20 +94,19 @@ resource "aws_cloudwatch_dashboard" "main" {
 
         properties = {
           title  = "Application Load Balancer Requests"
-          view   = "timeSeries"
           region = var.aws_region
+          view   = "timeSeries"
+          stat   = "Sum"
+          period = 60
 
           metrics = [
             [
               "AWS/ApplicationELB",
               "RequestCount",
               "LoadBalancer",
-              join("/", slice(split("/", aws_lb.main.arn), 2, 5))
+              join("/", slice(split("/", aws_lb.main.arn), 1, 4))
             ]
           ]
-
-          period = 60
-          stat   = "Sum"
         }
       },
       {
@@ -130,22 +118,21 @@ resource "aws_cloudwatch_dashboard" "main" {
 
         properties = {
           title  = "Unhealthy Application Targets"
-          view   = "timeSeries"
           region = var.aws_region
+          view   = "timeSeries"
+          stat   = "Maximum"
+          period = 60
 
           metrics = [
             [
               "AWS/ApplicationELB",
               "UnHealthyHostCount",
               "LoadBalancer",
-              join("/", slice(split("/", aws_lb.main.arn), 2, 5)),
+              join("/", slice(split("/", aws_lb.main.arn), 1, 4)),
               "TargetGroup",
-              join("/", slice(split("/", aws_lb_target_group.app.arn), 2, 5))
+              format("targetgroup/%s", join("/", slice(split("/", aws_lb_target_group.app.arn), 1, 3)))
             ]
           ]
-
-          period = 60
-          stat   = "Maximum"
         }
       },
       {
@@ -157,20 +144,19 @@ resource "aws_cloudwatch_dashboard" "main" {
 
         properties = {
           title  = "Load Balancer HTTP 5XX Errors"
-          view   = "timeSeries"
           region = var.aws_region
+          view   = "timeSeries"
+          stat   = "Sum"
+          period = 60
 
           metrics = [
             [
               "AWS/ApplicationELB",
               "HTTPCode_ELB_5XX_Count",
               "LoadBalancer",
-              join("/", slice(split("/", aws_lb.main.arn), 2, 5))
+              join("/", slice(split("/", aws_lb.main.arn), 1, 4))
             ]
           ]
-
-          period = 60
-          stat   = "Sum"
         }
       },
       {
@@ -181,9 +167,11 @@ resource "aws_cloudwatch_dashboard" "main" {
         height = 6
 
         properties = {
-          title  = "Auto Scaling In-Service Instances"
-          view   = "timeSeries"
+          title  = "Auto Scaling Group In-Service Instances"
           region = var.aws_region
+          view   = "timeSeries"
+          stat   = "Average"
+          period = 60
 
           metrics = [
             [
@@ -193,9 +181,6 @@ resource "aws_cloudwatch_dashboard" "main" {
               aws_autoscaling_group.app.name
             ]
           ]
-
-          period = 60
-          stat   = "Minimum"
         }
       }
     ]

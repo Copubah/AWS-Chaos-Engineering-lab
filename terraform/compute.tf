@@ -53,7 +53,7 @@ resource "aws_launch_template" "app" {
   )
 
   monitoring {
-    enabled = true
+    enabled = false
   }
 
   tag_specifications {
